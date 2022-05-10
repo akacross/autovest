@@ -487,7 +487,7 @@ function main()
 	
 		local _, aduty = getSampfuncsGlobalVar("aduty")
 		local _, HideMe = getSampfuncsGlobalVar("HideMe_check")
-		if _enabled and autovest.timer <= localClock() - _last_vest and not specstate and HideMe == 0 and not aduty then
+		if _enabled and autovest.timer <= localClock() - _last_vest and not specstate and HideMe == 0 and aduty == 0 then
 			if autovest.ddmode then
 				local _, ped = storeClosestEntities(PLAYER_PED)
 				local result, PlayerID = sampGetPlayerIdByCharHandle(ped)
