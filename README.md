@@ -1,3 +1,3 @@
 # autovest
 
-Credits go to spnko for the orginal mod
+Credits go to spnko(oleg) for the orginal mod
