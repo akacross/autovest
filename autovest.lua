@@ -1,6 +1,6 @@
 script_name("autovest")
 script_version("0.6")
-script_author("akacross")
+script_author("akacross", "spnKO(Oleg)")
 
 require"lib.moonloader"
 require"lib.sampfuncs"
