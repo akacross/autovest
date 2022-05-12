@@ -1,5 +1,5 @@
 script_name("autovest")
-script_version("0.4")
+script_version("0.6")
 script_author("akacross")
 
 require"lib.moonloader"
@@ -39,6 +39,10 @@ local skins = {}
 local factions = {61, 71, 73, 141, 163, 164, 165, 166, 191, 255, 265, 266, 267, 280, 281, 282, 283, 284, 285, 286, 287, 288, 294, 312, 300, 301, 306, 309, 310, 311, 120}
 local factions_color = {-14269954, -7500289, -14911565}
 local menu = new.bool(false)
+local skinmenu = new.bool(false)
+local selected = -1
+local skinTexture = {}
+local page = 1
 local blank = {}
 local autovest = {
 	autosave = true,
@@ -47,10 +51,13 @@ local autovest = {
 	enablebydefault = true,
 	sound = true,
 	timercorrection = true,
+	messages = false,
+	customskins = false,
 	notification = {true,true},
 	vestmode = 2,
 	timer = 12,
 	skinsurl = "https://dickwhitman.do.am/skins.html",
+	skins = {},
 	autovestcmd = "autovest",
 	autoacceptercmd = "av",
 	ddmodecmd = "ddmode",
@@ -84,6 +91,10 @@ imgui.OnInitialize(function()
 
 	imgui.GetIO().ConfigWindowsMoveFromTitleBarOnly = true
 	imgui.GetIO().IniFilename = nil
+	
+	for i = 0, 311 do
+		skinTexture[i] = imgui.CreateTextureFromFile("moonloader/resource/skins/Skin_"..i..".png")
+	end
 end)
 
 imgui.OnFrame(function() return autovest.notification[1] and _enabled and not isGamePaused() end,
@@ -102,7 +113,7 @@ imgui.OnFrame(function() return autovest.notification[2] and _enabled and not is
 function()
 	imgui.SetNextWindowPos(imgui.ImVec2(autovest.offeredpos[1], autovest.offeredpos[2]), imgui.Cond.Always)
 	imgui.Begin("offered", nil, imgui.WindowFlags.NoTitleBar + imgui.WindowFlags.NoResize + imgui.WindowFlags.NoCollapse + imgui.WindowFlags.NoMove + imgui.WindowFlags.NoScrollbar)
-		imgui.Text(string.format("You got an offer from: \n%s[%d]", sampname2, playerid2))
+		imgui.Text(string.format("You got an offer from: \n%s[%d]\nAutoaccepter is %s", sampname2, playerid2, autoaccepter and 'enabled' or 'disabled'))
 	imgui.End()
 end).HideCursor = true
 
@@ -202,7 +213,7 @@ function()
 
 			imgui.SetCursorPos(imgui.ImVec2(170, 5))
 			  
-			if imgui.CustomButton(fa.ICON_FA_INFO_CIRCLE .. '  About me',
+			if imgui.CustomButton(fa.ICON_FA_PEOPLE_CARRY .. '  Skins',
 				_menu == 2 and imgui.ImVec4(0.56, 0.16, 0.16, 1) or imgui.ImVec4(0.16, 0.16, 0.16, 0.9),
 				imgui.ImVec4(0.40, 0.12, 0.12, 1), 
 				imgui.ImVec4(0.30, 0.08, 0.08, 1), 
@@ -273,6 +284,13 @@ function()
 				if imgui.Checkbox("Enabled by default", new.bool(autovest.enablebydefault)) then
 					autovest.enablebydefault = not autovest.enablebydefault
 				end
+				
+				imgui.SameLine()
+				imgui.SetCursorPosX(imgui.GetWindowWidth() / 1.8)
+				if imgui.Checkbox("Message Spam", new.bool(autovest.messages)) then
+					autovest.messages = not autovest.messages
+				end
+				
 				imgui.SetCursorPosY(imgui.GetWindowHeight() / 2.1)
 				imgui.Columns(1)
 				imgui.Separator()
@@ -312,12 +330,30 @@ function()
 			end
 			
 			if _menu == 2 then
-				--imgui.SetCursorPosX(imgui.GetWindowWidth() / 3)
-				--imgui.SetCursorPosY(imgui.GetWindowHeight() / 10)
-				--imgui.Image(nzlogo, imgui.ImVec2(96, 96))
-				imgui.SetCursorPosY(imgui.GetWindowHeight() / 1.7)
-				imgui.SetCursorPosX(imgui.GetWindowWidth() / 4.5)
-				imgui.Text(fa.ICON_FA_COPYRIGHT .. " Made by SpnKO(Oleg)/akacross")
+				
+				if imgui.Checkbox("Custom Skins", new.bool(autovest.customskins)) then
+					autovest.customskins = not autovest.customskins
+				end
+				imgui.SameLine()
+				if imgui.Button(u8"Add Skin") then
+					autovest.skins[#autovest.skins + 1] = 0
+				end
+				
+				for k, v in ipairs(autovest.skins) do
+					local skinid = new.int[1](v)
+					if imgui.InputInt('##skinid'..k, skinid, 1, 1) then
+						autovest.skins[k] = skinid[0]
+					end 
+					imgui.SameLine()
+					if imgui.Button(u8"Pick Skin##"..k) then
+						skinmenu[0] = not skinmenu[0]
+						selected = k
+					end
+					imgui.SameLine()
+					if imgui.Button(u8"x##"..k) then
+						table.remove(autovest.skins, k)
+					end
+				end
 			end
 		imgui.EndChild()
 		imgui.SetCursorPos(imgui.ImVec2(92, 384))
@@ -373,7 +409,52 @@ function()
 	imgui.End()
 end)
 
--- IMGUI_API bool          CustomButton(const char* label, const ImVec4& col, const ImVec4& col_focus, const ImVec4& col_click, const ImVec2& size = ImVec2(0,0));
+imgui.OnFrame(function() return skinmenu[0] end,
+function()
+	local width, height = getScreenResolution()
+	imgui.SetNextWindowPos(imgui.ImVec2(width / 2, height / 2), imgui.Cond.FirstUseEver, imgui.ImVec2(0.5, 0.5))
+	imgui.SetNextWindowSize(imgui.ImVec2(505, 390), imgui.Cond.FirstUseEver)
+	imgui.Begin(u8("Skin Menu"), skinmenu, imgui.WindowFlags.NoResize + imgui.WindowFlags.NoCollapse)
+		if page == 15 then max = 299 else max = 41+(21*(page-2)) end
+		for i = 21+(21*(page-2)), max do
+			if i <= 27+(21*(page-2)) and i ~= 21+(21*(page-2)) then
+				imgui.SameLine()
+			elseif i <= 34+(21*(page-2)) and i > 28+(21*(page-2)) then
+				imgui.SameLine()
+			elseif i <= 41+(21*(page-2)) and i > 35+(21*(page-2)) then
+				imgui.SameLine()
+			end
+			if imgui.ImageButton(skinTexture[i], imgui.ImVec2(55, 100)) then
+				autovest.skins[selected] = i
+				skinmenu[0] = false
+			end
+			if imgui.IsItemHovered() then imgui.SetTooltip("Skin "..i.."") end
+		end
+	
+		imgui.SetCursorPos(imgui.ImVec2(555, 360))
+		
+		imgui.Indent(210)
+		
+		if imgui.Button(u8"Previous", new.bool) and page > 0 then
+			if page == 1 then
+				page = 15
+			else
+				page = page - 1
+			end
+		end
+		imgui.SameLine()
+		if imgui.Button(u8"Next", new.bool) and page < 16 then
+			if page == 15 then
+				page = 1
+			else
+				page = page + 1
+			end
+		end
+		imgui.SameLine()
+		imgui.Text("Page "..page.."/15")
+	imgui.End()
+end)
+
 function imgui.CustomButton(name, color, colorHovered, colorActive, size)
     local clr = imgui.Col
     imgui.PushStyleColor(clr.Button, color)
@@ -408,8 +489,12 @@ function main()
 	end)
 	
 	sampRegisterChatCommand(autovest.autoacceptercmd, function() 
-		autoaccepter = not autoaccepter
-		sampAddChatMessage(string.format("[Horizon Autovest]{ffff00} Autoaccepter is now %s.", autoaccepter and 'enabled' or 'disabled'), 1999280)
+		if autovest.vestmode == 0 then
+			autoaccepter = not autoaccepter
+			sampAddChatMessage(string.format("[Horizon Autovest]{ffff00} Autoaccepter is now %s.", autoaccepter and 'enabled' or 'disabled'), 1999280)
+		else
+			sampAddChatMessage("[Horizon Autovest]{ffff00} Autoaccepter is for families only.", 1999280)
+		end
 	end)
 	
 	sampRegisterChatCommand(autovest.ddmodecmd, function() 
@@ -435,22 +520,22 @@ function main()
 	
 	sampRegisterChatCommand(autovest.vestmodecmd, function(params) 
 		if string.len(params) > 0 then 
-			if params == 'gang' then
+			if params == 'families' then
 				autovest.vestmode = 0
-				sampAddChatMessage("[Horizon Autovest]{ffff00} vestmode is now set to Gang.", 1999280)
-			elseif params == 'faction' then
+				sampAddChatMessage("[Horizon Autovest]{ffff00} vestmode is now set to Families.", 1999280)
+			elseif params == 'factions' then
 				autovest.vestmode = 1
-				sampAddChatMessage("[Horizon Autovest]{ffff00} vestmode is now set to Faction.", 1999280)
+				sampAddChatMessage("[Horizon Autovest]{ffff00} vestmode is now set to Factions.", 1999280)
 			elseif params == 'everyone' then
 				autovest.vestmode = 2
 				sampAddChatMessage("[Horizon Autovest]{ffff00} vestmode is now set to Everyone.", 1999280)
 			else
 				sampAddChatMessage("[Horizon Autovest]{ffff00} vestmode is currently set to "..vestmodename(autovest.vestmode)..".", 1999280)
-				sampAddChatMessage('USAGE: /'..autovest.vestmodecmd..' [gang/faction/everyone]', -1)
+				sampAddChatMessage('USAGE: /'..autovest.vestmodecmd..' [families/faction/everyone]', -1)
 			end
 		else
 			sampAddChatMessage("[Horizon Autovest]{ffff00} vestmode is currently set to "..vestmodename(autovest.vestmode)..".", 1999280)
-			sampAddChatMessage('USAGE: /'..autovest.vestmodecmd..' [gang/faction/everyone]', -1)
+			sampAddChatMessage('USAGE: /'..autovest.vestmodecmd..' [families/faction/everyone]', -1)
 		end
 	end)
 	
@@ -461,6 +546,13 @@ function main()
 	loadskinids()
 	
 	while true do wait(0)
+		if autovest.vestmode ~= 0 then
+			if autoaccepter then
+				autoaccepter = false
+				sampAddChatMessage(string.format("[Horizon Autovest]{ffff00} Autoaccepter is now %s.", autoaccepter and 'enabled' or 'disabled'), 1999280)
+			end
+		end
+		
 		if move[1] then	
 			x, y = getCursorPos()
 			if isKeyJustPressed(VK_LBUTTON) then 
@@ -501,8 +593,14 @@ function main()
 							local aim, _ = getCharPlayerIsTargeting(playerHandle)
 							if pAnimId ~= 1158 and pAnimId ~= 1159 and pAnimId ~= 1160 and pAnimId ~= 1161 and pAnimId ~= 1162 and pAnimId ~= 1163 and pAnimId ~= 1164 and pAnimId ~= 1165 and pAnimId ~= 1166 and pAnimId ~= 1167 and pAnimId ~= 1069 and pAnimId ~= 1070 and pAnimId2 ~= 746 and not aim then
 								if autovest.vestmode == 0 then
-									if has_number(skins, getCharModel(ped)) then
-										sendGuard(PlayerID)
+									if autovest.customskins then
+										if has_number(autovest.skins, getCharModel(ped)) then
+											sendGuard(PlayerID)
+										end
+									else
+										if has_number(skins, getCharModel(ped)) then
+											sendGuard(PlayerID)
+										end
 									end
 								end
 								if autovest.vestmode == 1 then
@@ -533,8 +631,14 @@ function main()
 							local aim, _ = getCharPlayerIsTargeting(playerHandle)
 							if pAnimId ~= 1158 and pAnimId ~= 1159 and pAnimId ~= 1160 and pAnimId ~= 1161 and pAnimId ~= 1162 and pAnimId ~= 1163 and pAnimId ~= 1164 and pAnimId ~= 1165 and pAnimId ~= 1166 and pAnimId ~= 1167 and pAnimId ~= 1069 and pAnimId ~= 1070 and pAnimId2 ~= 746 and not aim then
 								if autovest.vestmode == 0 then
-									if has_number(skins, getCharModel(ped)) then
-										sendGuard(PlayerID)
+									if autovest.customskins then
+										if has_number(autovest.skins, getCharModel(ped)) then
+											sendGuard(PlayerID)
+										end
+									else
+										if has_number(skins, getCharModel(ped)) then
+											sendGuard(PlayerID)
+										end
 									end
 								end
 								if autovest.vestmode == 1 then
@@ -600,9 +704,11 @@ end
 
 function loadskinids()
 	urlstring = https.request(autovest.skinsurl)
-	for skinid in string.match(urlstring, "<body>(.+)</body>").gmatch(urlstring, "%d*") do
-		if string.len(skinid) > 0 then 
-			table.insert(skins, skinid)
+	if urlstring ~= nil then
+		for skinid in string.match(urlstring, "<body>(.+)</body>").gmatch(urlstring, "%d*") do
+			if string.len(skinid) > 0 then 
+				table.insert(skins, skinid)
+			end
 		end
 	end
 end
@@ -627,7 +733,7 @@ function onWindowMessage(msg, wparam, lparam)
 end
 
 function sampev.onServerMessage(color, text)
-	if text:find("has taken control of the") and color == -65366 and autoaccepter then
+	if text:find("has taken control of the") and color == -65366 and autoaccepter and autovest.vestmode == 0 then
 		autoaccepter = false
 
 		sampAddChatMessage("[Horizon Autovest]{ffff00} Automatic vest disabled because point had ended.", 1999280)
@@ -639,6 +745,10 @@ function sampev.onServerMessage(color, text)
 		else
 			_last_vest = localClock() - 11.8
 		end
+		
+		if autovest.messages then
+			return false
+		end
 	end
 
 	if text:find("You can't /guard while aiming.") and color == -1347440726 then
@@ -647,21 +757,43 @@ function sampev.onServerMessage(color, text)
 		else
 			_last_vest = localClock() - 11.8
 		end
+		
+		if autovest.messages then
+			return false
+		end
 	end
-	
+
 	if text:find("You must wait") and text:find("seconds before selling another vest.") and autovest.timercorrection then
 		cooldown = string.match (text, "%d+")
 		autovest.timer = cooldown + 0.5
+		
+		if autovest.messages then
+			return false
+		end
 	end
-	
+
 	if text:find("accepted your protection, and the $200 was added to your money.") and color == 869072810 then
 		sampname = 'Nobody'
 		playerid = -1
+		
+		if autovest.messages then
+			return false
+		end
+	end
+
+	if text:find("* You offered protection to ") and text:find(" for $200.") and color == 869072810 then
+		if autovest.messages then
+			return false
+		end
 	end
 	
 	if text:find("You accepted the protection for $200 from") and color == 869072810 then
 		sampname2 = 'Nobody'
 		playerid2 = -1
+		
+		if autovest.messages then
+			return false
+		end
 	end
 	
 	if text:find("* Bodyguard ") and text:find(" wants to protect you for $200, type /accept bodyguard to accept.") and color == 869072810 then
@@ -682,6 +814,10 @@ function sampev.onServerMessage(color, text)
 				autoacceptertoggle = true
 			end
 		end)
+		
+		if autovest.messages then
+			return false
+		end
 	end
 end
 
@@ -748,9 +884,9 @@ end
 
 function vestmodename(vestmode)
 	if vestmode == 0 then
-		return 'Gang'
+		return 'Families'
 	elseif vestmode == 1 then
-		return 'Faction'
+		return 'Factions'
 	elseif vestmode == 2 then
 		return 'Everyone'
 	end
